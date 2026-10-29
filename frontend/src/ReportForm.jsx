@@ -1,40 +1,27 @@
-import { useState } from 'react'
-import { ArrowLeft, ImagePlus, LoaderCircle, Leaf } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { ArrowLeft, Check, ImagePlus, LocateFixed, LoaderCircle, MapPin, ShieldCheck } from 'lucide-react'
 import { uploadImageToCloudinary } from './cloudinary.js'
+import { api } from './api.js'
+
+const draftKey=kind=>`forestguard:report-draft:${kind}`
+const blank={title:'',description:'',severity:'MEDIUM',latitude:'',longitude:'',animalType:''}
 
 export default function ReportForm({ kind }) {
-  const isFire = kind === 'fires'
-  const [busy, setBusy] = useState(false)
-  const [photo, setPhoto] = useState(null)
-  const [message, setMessage] = useState('')
-
-  async function submit(event) {
-    event.preventDefault()
-    const form = new FormData(event.currentTarget)
-    setBusy(true); setMessage('')
-    try {
-      const image = photo ? await uploadImageToCloudinary(photo) : {}
-      const response = await fetch(`/api/${kind}`, {
-        method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: form.get('title'), description: form.get('description'), severity: form.get('severity'), latitude: form.get('latitude') || null, longitude: form.get('longitude') || null, ...image }),
-      })
-      const result = await response.json()
-      if (!response.ok) throw new Error(result.error || 'Could not save report.')
-      window.location.assign('/dashboard')
-    } catch (error) { setMessage(error.message) } finally { setBusy(false) }
-  }
-
-  return <main className="min-h-screen bg-[#f6f7f4] px-5 py-10 text-[#232a24]">
-    <div className="mx-auto max-w-2xl"><a href="/dashboard" className="inline-flex items-center gap-2 text-sm text-[#647367]"><ArrowLeft size={16}/>Dashboard</a>
-      <header className="mb-6 mt-8 flex items-center gap-3"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-[#eaf3ec] text-[#34734a]"><Leaf size={22}/></span><div><p className="text-xs font-semibold uppercase tracking-wider text-[#719276]">ForestGuard 360</p><h1 className="mt-1 text-2xl font-semibold">{isFire?'Report a forest fire':'Report a wildlife conflict'}</h1></div></header>
-      <form onSubmit={submit} className="space-y-5 rounded-3xl border border-[#e9ece7] bg-white p-6 shadow-[0_3px_14px_#21332207] md:p-8">
-        {message&&<p role="alert" className="rounded-xl bg-[#fff0e9] p-3 text-sm text-[#a14e35]">{message}</p>}
-        <label className="block text-sm font-medium">Title<input name="title" required maxLength="180" className="mt-2 h-11 w-full rounded-xl border border-[#dfe5dd] px-3 outline-none focus:border-[#76a57c]"/></label>
-        <label className="block text-sm font-medium">Details<textarea name="description" rows="4" className="mt-2 w-full rounded-xl border border-[#dfe5dd] p-3 outline-none focus:border-[#76a57c]"/></label>
-        <div className="grid gap-4 sm:grid-cols-3"><label className="text-sm font-medium">Severity<select name="severity" className="mt-2 h-11 w-full rounded-xl border border-[#dfe5dd] bg-white px-3"><option>LOW</option><option selected>MEDIUM</option><option>HIGH</option><option>CRITICAL</option></select></label><label className="text-sm font-medium">Latitude<input name="latitude" type="number" step="any" min="-90" max="90" className="mt-2 h-11 w-full rounded-xl border border-[#dfe5dd] px-3"/></label><label className="text-sm font-medium">Longitude<input name="longitude" type="number" step="any" min="-180" max="180" className="mt-2 h-11 w-full rounded-xl border border-[#dfe5dd] px-3"/></label></div>
-        <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-[#cbd8ca] p-4 text-sm text-[#647367]"><ImagePlus size={19}/><span className="flex-1">{photo?.name || 'Add a photo (Cloudinary)'}</span><input type="file" accept="image/*" className="sr-only" onChange={e=>setPhoto(e.target.files?.[0]||null)}/></label>
-        <button disabled={busy} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#2c6643] text-sm font-semibold text-white hover:bg-[#235538] disabled:opacity-60">{busy&&<LoaderCircle size={16} className="animate-spin"/>}Submit report</button>
-      </form>
-    </div>
-  </main>
+  const isFire=kind==='fires';const [values,setValues]=useState(blank);const [photo,setPhoto]=useState(null);const [busy,setBusy]=useState(false);const [message,setMessage]=useState('');const [error,setError]=useState('');const [locating,setLocating]=useState(false)
+  useEffect(()=>{try{const saved=localStorage.getItem(draftKey(kind));if(saved)setValues({...blank,...JSON.parse(saved)})}catch{localStorage.removeItem(draftKey(kind))}},[kind])
+  function change(event){const next={...values,[event.target.name]:event.target.value};setValues(next);localStorage.setItem(draftKey(kind),JSON.stringify(next))}
+  function useLocation(){if(!navigator.geolocation){setError('Location is not available in this browser.');return}setLocating(true);setError('');navigator.geolocation.getCurrentPosition(({coords})=>{const next={...values,latitude:coords.latitude.toFixed(6),longitude:coords.longitude.toFixed(6)};setValues(next);localStorage.setItem(draftKey(kind),JSON.stringify(next));setLocating(false)},()=>{setError('Could not read your location. You can enter coordinates instead.');setLocating(false)},{enableHighAccuracy:true,timeout:10000})}
+  async function submit(event){event.preventDefault();setError('');setMessage('');if(!navigator.onLine){setMessage('Draft saved on this device. Reconnect to send it; attach the photo again before submitting.');return}setBusy(true);try{let image={};if(photo)image=await uploadImageToCloudinary(photo);await api(`/api/${kind}`,{method:'POST',body:JSON.stringify({...values,latitude:values.latitude||null,longitude:values.longitude||null,...image})});localStorage.removeItem(draftKey(kind));window.location.assign('/my-reports')}catch(cause){setError(cause.message);if(!navigator.onLine)setMessage('Your text is saved on this device. Reconnect to submit it. The photo will need to be attached again.')}finally{setBusy(false)}}
+  return <main className="min-h-screen bg-[#f5f7f3] px-4 py-7 text-[#222a23] sm:px-6 sm:py-10"><div className="mx-auto max-w-2xl"><a href="/my-reports" className="inline-flex min-h-10 items-center gap-2 text-sm text-[#647367]"><ArrowLeft size={16}/>Back to your reports</a><header className="mb-6 mt-7"><p className="text-[11px] font-semibold uppercase tracking-[.14em] text-[#6f8e70]">Community report</p><h1 className="mt-2 text-2xl font-semibold tracking-tight md:text-3xl">{isFire?'Report a forest fire':'Report a wildlife conflict'}</h1><p className="mt-2 text-sm leading-5 text-[#778178]">Share what happened and where. A response officer will review the report.</p></header>
+    {!navigator.onLine&&<div role="status" className="mb-4 rounded-xl border border-[#ead8b2] bg-[#fff9ea] p-3 text-sm text-[#856c38]">You are offline. Your draft stays on this device until you can send it.</div>}
+    <form onSubmit={submit} className="space-y-5 rounded-2xl border border-[#e5ebe3] bg-white p-5 shadow-[0_2px_12px_#1d352205] sm:p-7">{error&&<p role="alert" className="rounded-xl bg-[#fff0e9] p-3 text-sm text-[#a14e35]">{error}</p>}{message&&<p role="status" className="flex items-start gap-2 rounded-xl bg-[#edf4ea] p-3 text-sm text-[#416c48]"><Check size={16} className="mt-0.5 shrink-0"/>{message}</p>}
+      <label className="block text-sm font-medium">Short description<span className="mt-1 block text-xs font-normal text-[#929b92]">For example: smoke near a trail, or an animal near homes.</span><input name="title" required maxLength="180" value={values.title} onChange={change} className="mt-2 h-11 w-full rounded-xl border border-[#dfe5dd] px-3 outline-none focus:border-[#76a57c]"/></label>
+      {!isFire&&<label className="block text-sm font-medium">Animal, if known<input name="animalType" maxLength="100" value={values.animalType} onChange={change} placeholder="Leave blank if unsure" className="mt-2 h-11 w-full rounded-xl border border-[#dfe5dd] px-3 outline-none focus:border-[#76a57c]"/></label>}
+      <label className="block text-sm font-medium">What happened?<textarea name="description" rows={4} maxLength={4000} value={values.description} onChange={change} className="mt-2 w-full rounded-xl border border-[#dfe5dd] p-3 outline-none focus:border-[#76a57c]"/><span className="mt-1 block text-right text-[11px] font-normal text-[#929b92]">{values.description.length}/4,000</span></label>
+      <label className="block text-sm font-medium">Initial urgency<select name="severity" value={values.severity} onChange={change} className="mt-2 h-11 w-full rounded-xl border border-[#dfe5dd] bg-white px-3"><option value="LOW">Low — no immediate danger</option><option value="MEDIUM">Medium — needs review</option><option value="HIGH">High — active risk nearby</option><option value="CRITICAL">Critical — immediate threat to life or active fire</option></select><span className="mt-1 block text-xs font-normal text-[#929b92]">A response officer will confirm the priority.</span></label>
+      <fieldset><legend className="text-sm font-medium">Location</legend><p className="mt-1 text-xs text-[#929b92]">Location is shared with response staff to help them find the incident.</p><div className="mt-2 flex flex-wrap gap-2"><button type="button" onClick={useLocation} disabled={locating} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-[#dfe5dd] px-3 text-xs font-medium text-[#4f6451] hover:bg-[#f7faf6]">{locating?<LoaderCircle size={14} className="animate-spin"/>:<LocateFixed size={14}/>}Use my location</button>{values.latitude&&values.longitude&&<span className="inline-flex items-center gap-1.5 self-center text-xs text-[#6b776b]"><MapPin size={13}/>{values.latitude}, {values.longitude}</span>}</div><div className="mt-3 grid grid-cols-2 gap-3"><label className="text-xs font-medium text-[#647067]">Latitude<input name="latitude" type="number" step="any" min="-90" max="90" value={values.latitude} onChange={change} className="mt-1.5 h-10 w-full rounded-lg border border-[#dfe5dd] px-3 text-sm"/></label><label className="text-xs font-medium text-[#647067]">Longitude<input name="longitude" type="number" step="any" min="-180" max="180" value={values.longitude} onChange={change} className="mt-1.5 h-10 w-full rounded-lg border border-[#dfe5dd] px-3 text-sm"/></label></div></fieldset>
+      <label className="block text-sm font-medium">Photo evidence <span className="font-normal text-[#929b92]">(optional)</span><span className="mt-1 block text-xs font-normal text-[#929b92]">Avoid including faces or identifying details. Images are stored with Cloudinary.</span><span className="mt-2 flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border border-dashed border-[#cbd8ca] px-3 text-sm text-[#647367]"><ImagePlus size={18}/><span className="flex-1 truncate">{photo?.name||'Choose an image'}</span><input type="file" accept="image/jpeg,image/png,image/webp" onChange={e=>{const file=e.target.files?.[0];if(file&&file.size>10*1024*1024){setError('Choose an image under 10 MB.');e.target.value='';return}setPhoto(file||null);setError('')}} className="sr-only"/></span></label>
+      <div className="flex items-start gap-2 rounded-xl bg-[#f7f9f6] p-3 text-xs leading-5 text-[#758075]"><ShieldCheck size={15} className="mt-0.5 shrink-0 text-[#66866a]"/><p>Submit only information you believe is accurate. Do not approach or try to handle wildlife or a fire.</p></div>
+      <button disabled={busy} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#2e6744] px-4 text-sm font-semibold text-white hover:bg-[#24553a] disabled:opacity-60">{busy&&<LoaderCircle size={16} className="animate-spin"/>}{busy?'Sending report…':'Send report'}</button>
+    </form></div></main>
 }

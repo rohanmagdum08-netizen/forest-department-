@@ -29,6 +29,24 @@ CREATE TABLE IF NOT EXISTS conflict_reports (
   image_url TEXT,
   cloudinary_public_id TEXT,
   reported_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  animal_type TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+ALTER TABLE fire_reports ADD COLUMN IF NOT EXISTS assigned_to BIGINT REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE fire_reports ADD COLUMN IF NOT EXISTS verified_by BIGINT REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE fire_reports ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+ALTER TABLE conflict_reports ADD COLUMN IF NOT EXISTS assigned_to BIGINT REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE conflict_reports ADD COLUMN IF NOT EXISTS verified_by BIGINT REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE conflict_reports ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+ALTER TABLE conflict_reports ADD COLUMN IF NOT EXISTS animal_type TEXT NOT NULL DEFAULT '';
+CREATE TABLE IF NOT EXISTS incident_events (
+  id BIGSERIAL PRIMARY KEY,
+  incident_type TEXT NOT NULL CHECK (incident_type IN ('fire','conflict')),
+  incident_id BIGINT NOT NULL,
+  actor_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  event_type TEXT NOT NULL,
+  status TEXT,
+  message TEXT NOT NULL DEFAULT '',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE TABLE IF NOT EXISTS animals (
@@ -64,3 +82,6 @@ CREATE TABLE IF NOT EXISTS bookings (
 );
 CREATE INDEX IF NOT EXISTS fire_reports_created_idx ON fire_reports(created_at DESC);
 CREATE INDEX IF NOT EXISTS conflict_reports_created_idx ON conflict_reports(created_at DESC);
+CREATE INDEX IF NOT EXISTS fire_reports_status_idx ON fire_reports(status, created_at DESC);
+CREATE INDEX IF NOT EXISTS conflict_reports_status_idx ON conflict_reports(status, created_at DESC);
+CREATE INDEX IF NOT EXISTS incident_events_lookup_idx ON incident_events(incident_type, incident_id, created_at DESC);
