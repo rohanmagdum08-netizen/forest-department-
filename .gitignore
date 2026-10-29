@@ -2,9 +2,11 @@
 __pycache__/
 *.py[cod]
 .env
-db.sqlite3
+*.sqlite3
 media/
 staticfiles/
 node_modules/
+frontend/node_modules/
 .vite/
 frontend/dist/
+static/reports/
